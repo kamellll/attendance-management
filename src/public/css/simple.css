@@ -1,0 +1,30 @@
+.header {
+    background: #000;
+}
+
+.header__inner {
+    margin: 0 auto;
+    padding: 10px 13px;
+    text-align: center;
+    display: flex;
+    justify-content: left;
+}
+
+.header-utilities {
+    display: flex;
+    align-items: center;
+    justify-content: left;
+}
+
+.header__inner img {
+    height: 30px;
+}
+
+body {}
+
+input,
+textarea,
+button,
+select {
+    font-family: "Inter", sans-serif;
+}

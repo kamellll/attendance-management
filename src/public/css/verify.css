@@ -1,0 +1,41 @@
+body {
+    background: #fff;
+}
+
+.verify p {
+    margin-top: 100px;
+    text-align: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.verify__link {
+    border-radius: 5px;
+    background: #d9d9d9;
+    border: 1px solid #767676;
+    margin: 30px auto;
+    width: 200px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+}
+
+.verify__link a {
+    text-decoration: none;
+    color: #000;
+}
+
+form {
+    display: flex;
+    justify-content: center;
+}
+
+form button {
+    border: none;
+    background: none;
+    width: 200px;
+    color: #4096d9;
+    font-size: 1em;
+}
