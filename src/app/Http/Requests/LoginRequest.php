@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-
+use Illuminate\Validation\Rule;
 class LoginRequest extends FormRequest
 {
     /**
@@ -13,7 +13,7 @@ class LoginRequest extends FormRequest
      */
     public function authorize()
     {
-        return false;
+        return true;
     }
 
     /**
@@ -24,7 +24,22 @@ class LoginRequest extends FormRequest
     public function rules()
     {
         return [
-            //
+            'email' => [
+                'required',
+                'string',
+                'email',
+            ],
+            'password' => ['required', 'string'],
+        ];
+    }
+
+    public function messages()
+    {
+        // エラーメッセージ内で使われる項目名（日本語にしておくと便利）
+        return [
+            'email.required' => 'メールアドレスを入力してください',
+            'email.email' => 'メールアドレスのはメール形式で入力してください',
+            'password.required' => 'パスワードを入力してください',
         ];
     }
 }

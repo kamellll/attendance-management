@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\AuthController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -12,7 +12,13 @@ use Illuminate\Support\Facades\Route;
 | contains the "web" middleware group. Now create something great!
 |
 */
-
-Route::get('/', function () {
-    return view('welcome');
+Route::get('/login', [AuthController::class, 'index'])->name('login');
+Route::get('/register', [AuthController::class, 'registerView'])->name('register');
+Route::post('/register', [AuthController::class, 'store']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::middleware('auth')->group(function () {
+    Route::get('/verify', function () {
+        return redirect()->route('verification.notice'); // => /email/verify
+    });
+    Route::get('/attendance/detail/', [AuthController::class, 'index']);
 });
