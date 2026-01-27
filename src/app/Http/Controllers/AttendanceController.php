@@ -197,46 +197,15 @@ class AttendanceController extends Controller
 
         return redirect('/attendance')->with('message', '退勤しました。');
     }
+    private const SESSION_KEY = 'attendance.list.month'; // 'Y-m' を保存
+
     public function list(Request $request)
     {
         $userId = auth()->id();
 
-        $monthParam = $request->query('month');
-
-        if ($monthParam) {
-            $month = Carbon::createFromFormat('Y-m', $monthParam)->startOfMonth();
-        } else {
-            $latestGo = Status::where('user_id', $userId)->max('go');
-            $month = $latestGo
-                ? Carbon::parse($latestGo)->startOfMonth()
-                : Carbon::now()->startOfMonth();
-        }
-
-        // ★ 日本語曜日を出すため
         Carbon::setLocale('ja');
 
-        $start = $month->copy()->startOfMonth();
-        $end = $month->copy()->endOfMonth();
-
-        $items = Status::query()
-            ->where('user_id', $userId)
-            ->whereBetween('go', [$start, $end])
-            ->orderBy('go', 'asc')
-            ->get();
-
-        // ===== 表示フォーマット用 =====
-        // 表示中の年月：2026/01
-        $monthLabel = $month->format('Y/m');
-
-        // 各レコードの日付：2026/01/26(月)
-        // isoFormat('ddd') が「月」などの日本語曜日になります（locale=ja前提）
-        $items->transform(function ($row) {
-            $row->date_label = Carbon::parse($row->go)->format('Y/m/d')
-                . '(' . Carbon::parse($row->go)->isoFormat('ddd') . ')';
-            return $row;
-        });
-
-        // ===== 月ごとページネーション（1ページ=1か月）=====
+        // このユーザーが持つ「データがある月」一覧（降順）
         $monthKeys = Status::query()
             ->where('user_id', $userId)
             ->selectRaw("DATE_FORMAT(go, '%Y-%m') as ym")
@@ -245,33 +214,104 @@ class AttendanceController extends Controller
             ->pluck('ym')
             ->values();
 
-        $currentPage = 1;
-        if ($monthKeys->count() > 0) {
-            $idx = $monthKeys->search($month->format('Y-m'));
-            $currentPage = ($idx === false) ? 1 : ($idx + 1);
+        // セッションに保存されている表示月（なければ最新月 or 今月）
+        $ym = session(self::SESSION_KEY);
+
+        if (!$ym) {
+            $ym = $monthKeys->first() ?? Carbon::now()->format('Y-m');
+            session([self::SESSION_KEY => $ym]);
         }
 
-        $paginator = new LengthAwarePaginator(
-            $items,
-            $monthKeys->count(),
-            1,
-            $currentPage,
-            [
-                'path' => url('/attendance/list'),
-                'query' => ['month' => $month->format('Y-m')],
-            ]
-        );
+        // 月が存在しない（削除などで）場合は最新に寄せる
+        if ($monthKeys->count() > 0 && !$monthKeys->contains($ym)) {
+            $ym = $monthKeys->first();
+            session([self::SESSION_KEY => $ym]);
+        }
 
-        // 前/次月（クエリ用）
-        $prevYm = $monthKeys->get($currentPage) ?? null;      // 古い月へ
-        $nextYm = $monthKeys->get($currentPage - 2) ?? null;  // 新しい月へ
+        $month = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
 
-        return view('attendance-list', [
-            'monthLabel' => $monthLabel, // ★ 2026/01
-            'items' => $items,      // ★ 各rowに date_label 追加済み
-            'paginator' => $paginator,
-            'prevYm' => $prevYm,
-            'nextYm' => $nextYm,
-        ]);
+        // 表示月の勤怠
+        $items = Status::query()
+            ->where('user_id', $userId)
+            ->whereBetween('go', [$start, $end])
+            ->orderBy('go', 'asc')
+            ->get();
+
+        // 表示ラベル：年月（2026/01）
+        $monthLabel = $month->format('Y/m');
+
+        // 日付ラベル：2026/01/26(月)
+        $items->transform(function ($row) {
+            $d = Carbon::parse($row->go);
+            $row->date_label = $d->format('Y/m/d') . '(' . $d->isoFormat('ddd') . ')';
+            return $row;
+        });
+
+        // 前月・翌月（データがある月だけリンクを出す）
+        $idx = $monthKeys->search($ym); // 0-based（降順）
+        $prevYm = null; // 古い月（前月ボタン）
+        $nextYm = null; // 新しい月（翌月ボタン）
+
+        if ($idx !== false) {
+            $prevYm = $monthKeys->get($idx + 1);        // 例：2025-11（より古い）
+            $nextYm = $idx > 0 ? $monthKeys->get($idx - 1) : null; // 例：2026-01（より新しい）
+        }
+
+        return view('attendance-list', compact(
+            'monthLabel',
+            'items',
+            'prevYm',
+            'nextYm'
+        ));
+    }
+
+    public function moveMonth(Request $request)
+    {
+        $userId = auth()->id();
+        $direction = $request->input('direction'); // 'prev' or 'next'
+
+        if (!in_array($direction, ['prev', 'next'], true)) {
+            return redirect()->route('attendance.list');
+        }
+
+        // データがある月一覧（降順）
+        $monthKeys = Status::query()
+            ->where('user_id', $userId)
+            ->selectRaw("DATE_FORMAT(go, '%Y-%m') as ym")
+            ->groupBy('ym')
+            ->orderByDesc('ym')
+            ->pluck('ym')
+            ->values();
+
+        // データが何もないならそのまま戻す
+        if ($monthKeys->isEmpty()) {
+            session([self::SESSION_KEY => Carbon::now()->format('Y-m')]);
+            return redirect()->route('attendance.list');
+        }
+
+        $currentYm = session(self::SESSION_KEY) ?? $monthKeys->first();
+        if (!$monthKeys->contains($currentYm)) {
+            $currentYm = $monthKeys->first();
+        }
+
+        $idx = $monthKeys->search($currentYm);
+        if ($idx === false) {
+            $idx = 0;
+        }
+
+        // 移動先（月が存在する時だけ移動）
+        if ($direction === 'prev') {
+            $target = $monthKeys->get($idx + 1); // 古い方へ
+        } else {
+            $target = $idx > 0 ? $monthKeys->get($idx - 1) : null; // 新しい方へ
+        }
+
+        if ($target) {
+            session([self::SESSION_KEY => $target]);
+        }
+
+        return redirect()->route('attendance.list');
     }
 }

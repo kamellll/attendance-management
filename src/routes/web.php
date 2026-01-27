@@ -28,7 +28,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/attendance/rest', [AttendanceController::class, 'rest']);
     Route::post('/attendance/backRest', [AttendanceController::class, 'backRest']);
     Route::post('/attendance/back', [AttendanceController::class, 'back']);
-    // 勤怠一覧（月ごとページング）
+    // 勤怠一覧（表示）※URLは常にここ
     Route::get('/attendance/list', [AttendanceController::class, 'list'])
         ->name('attendance.list');
+
+    // 前月・翌月ボタン（セッション更新して /attendance/list に戻す）
+    Route::post('/attendance/list/move', [AttendanceController::class, 'moveMonth'])
+        ->name('attendance.list.move');
 });
