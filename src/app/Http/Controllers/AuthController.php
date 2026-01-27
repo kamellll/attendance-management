@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Auth\Events\Registered;
+use Carbon\Carbon;
 class AuthController extends Controller
 {
     public function index()
@@ -41,7 +42,7 @@ class AuthController extends Controller
             // まだメール未認証　→　認証メール送信
             return redirect('/email/verify');
         }
-        return redirect('/');
+        return redirect('/attendance');
     }
     public function store(RegisterRequest $request)
     {

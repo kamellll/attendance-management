@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AttendanceController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -20,5 +21,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/verify', function () {
         return redirect()->route('verification.notice'); // => /email/verify
     });
-    Route::get('/attendance/detail/', [AuthController::class, 'index']);
+    Route::get('/attendance', [AttendanceController::class, 'index']);
+    Route::get('/attendance/detail/', [AttendanceController::class, 'index']);
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::post('/attendance/regist', [AttendanceController::class, 'store']);
+    Route::post('/attendance/rest', [AttendanceController::class, 'rest']);
+    Route::post('/attendance/backRest', [AttendanceController::class, 'backRest']);
+    Route::post('/attendance/back', [AttendanceController::class, 'back']);
+    // 勤怠一覧（月ごとページング）
+    Route::get('/attendance/list', [AttendanceController::class, 'list'])
+        ->name('attendance.list');
 });

@@ -1,0 +1,85 @@
+body {}
+
+.attendance {
+    min-height: 90vh;
+    display: flex;
+    justify-content: center;
+    /* 横中央 */
+    align-items: center;
+    /* 縦中央 */
+}
+
+.attendance__box {
+    width: 300px;
+    height: 200px;
+}
+
+.attendance__condition {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #c8c8c8;
+    color: #757575;
+    width: 60px;
+    height: 30px;
+    border-radius: 20px;
+    margin: 5px auto;
+    font-size: 0.8em;
+    letter-spacing: 1px;
+}
+
+.attendance__date {
+    font-size: 1.3em;
+    text-align: center;
+    margin: 10px auto;
+}
+
+.attendance__time {
+    font-size: 3em;
+    font-weight: bold;
+    text-align: center;
+    margin: 10px auto;
+}
+
+.form__button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.attendance__form {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form__button-submit {
+    width: 130px;
+    height: 40px;
+    font-size: 1.3em;
+    font-weight: bold;
+    background-color: #000;
+    color: #fff;
+    margin: 30px auto;
+    border-radius: 10px;
+    border: none;
+}
+
+.form__button-rest {
+    width: 130px;
+    height: 40px;
+    font-size: 1.3em;
+    font-weight: bold;
+    background-color: #fff;
+    color: #000;
+    margin: 30px auto;
+    border-radius: 10px;
+    border: none;
+}
+
+.backed {
+    margin-top: 50px;
+    font-size: 1.3em;
+    font-weight: bold;
+    text-align: center;
+}
