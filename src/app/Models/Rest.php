@@ -19,6 +19,6 @@ class Rest extends Model
     ];
     public function status()
     {
-        return $this->belongsTo(Status::class);
+        return $this->belongsTo(Status::class, 'statuses_id');
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Rest;
 use Illuminate\Pagination\LengthAwarePaginator;
+use App\Http\Requests\AttendanceUpdateRequest;
 class AttendanceController extends Controller
 {
     public function index()
@@ -245,7 +246,7 @@ class AttendanceController extends Controller
         // 日付ラベル：2026/01/26(月)
         $items->transform(function ($row) {
             $d = Carbon::parse($row->go);
-            $row->date_label = $d->format('Y/m/d') . '(' . $d->isoFormat('ddd') . ')';
+            $row->date_label = $d->format('m/d') . '(' . $d->isoFormat('ddd') . ')';
             return $row;
         });
 
@@ -313,5 +314,197 @@ class AttendanceController extends Controller
         }
 
         return redirect()->route('attendance.list');
+    }
+
+    public function detail(int $id)
+    {
+        Carbon::setLocale('ja');
+
+        $userId = auth()->id();
+
+        $status = Status::query()
+            ->with([
+                'user:id,name',
+                'rests' => fn($q) => $q->orderBy('start', 'asc'),
+            ])
+            ->where('id', $id)
+            ->where('user_id', $userId) // 他人のを見せない
+            ->firstOrFail();
+
+        // ここから表示用整形（前回と同じ）
+        $go = Carbon::parse($status->go);
+        $back = $status->back ? Carbon::parse($status->back) : null;
+
+        $nameLabel = $status->user->name;
+        $yearLabel = $go->format('Y年');
+        $dateLabel = $go->format('n月j日');
+        $goTime = $go->format('H:i');
+        $backTime = $back ? $back->format('H:i') : '-';
+
+        $rests = $status->rests->map(function ($r) {
+            return [
+                'id' => $r->id,
+                'start' => Carbon::parse($r->start)->format('H:i'),
+                'end' => $r->end ? Carbon::parse($r->end)->format('H:i') : '-',
+            ];
+        });
+
+        return view('attendance-detail', [
+            'userId' => $userId,
+            'id' => $status->id,
+            'name' => $nameLabel,
+            'yearLabel' => $yearLabel,
+            'dateLabel' => $dateLabel,
+            'goTime' => $goTime,
+            'backTime' => $backTime,
+            'rests' => $rests,
+            'note' => $status->note ?? '',
+            'apply' => $status->apply,
+        ]);
+    }
+
+    public function update(AttendanceUpdateRequest $request)
+    {
+        $validated = $request->validated(); // Laravel8: 引数なしで配列が返る
+
+        $userId = auth()->id();
+        $statusId = (int) $validated['statuses_id'];
+
+        DB::transaction(function () use ($validated, $userId, $statusId) {
+
+            $status = Status::query()
+                ->where('id', $statusId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // 基準日（勤怠日）
+            $baseDate = Carbon::parse($status->go)->startOfDay();
+
+            // ★ここが今回のエラー対策：validated('go') は使わず配列から取得
+            $goAt = $baseDate->copy()->setTimeFromTimeString($validated['go']);   // string "HH:MM"
+            $backAt = $baseDate->copy()->setTimeFromTimeString($validated['back']); // string "HH:MM"
+
+            // 既存休憩の更新
+            $restIds = $validated['rest_ids'] ?? [];
+            $starts = $validated['start'] ?? [];
+            $ends = $validated['end'] ?? [];
+
+            for ($i = 0; $i < count($restIds); $i++) {
+                $rid = (int) $restIds[$i];
+
+                $restRow = Rest::query()
+                    ->where('id', $rid)
+                    ->where('statuses_id', $status->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $startStr = trim((string) ($starts[$i] ?? ''));
+                $endStr = trim((string) ($ends[$i] ?? ''));
+
+                // startが空の行は更新しない（仕様）
+                if ($startStr === '') {
+                    continue;
+                }
+
+                $startAt = $baseDate->copy()->setTimeFromTimeString($startStr);
+                $endAt = ($endStr !== '') ? $baseDate->copy()->setTimeFromTimeString($endStr) : null;
+
+                $restRow->update([
+                    'start' => $startAt,
+                    'end' => $endAt,
+                ]);
+            }
+
+            // 追加用の休憩（new_start が入っているときだけ作成）
+            $newStart = trim((string) ($validated['new_start'] ?? ''));
+            $newEnd = trim((string) ($validated['new_end'] ?? ''));
+
+            //休憩が追加されたかどうか0: 未追加、 1:追加
+            $restAdd = 0;
+            if ($newStart !== '') {
+                $restAdd = 1;
+                $newStartAt = $baseDate->copy()->setTimeFromTimeString($newStart);
+                $newEndAt = ($newEnd !== '') ? $baseDate->copy()->setTimeFromTimeString($newEnd) : null;
+
+                // ※ Restモデルで create を使うなら fillable が必要
+                Rest::create([
+                    'statuses_id' => $status->id,
+                    'start' => $newStartAt,
+                    'end' => $newEndAt,
+                ]);
+
+            }
+
+            // DBの休憩を再取得して合計秒を再計算（安全＆確実）
+            $rests = Rest::query()
+                ->where('statuses_id', $status->id)
+                ->lockForUpdate()
+                ->get();
+
+            $restTotalSeconds = 0;
+            foreach ($rests as $r) {
+                if ($r->end) {
+                    $restTotalSeconds += Carbon::parse($r->start)->diffInSeconds(Carbon::parse($r->end));
+                }
+            }
+
+            // 勤務合計秒 = (退勤-出勤) - 休憩秒
+            $workSeconds = $goAt->diffInSeconds($backAt) - $restTotalSeconds;
+            if ($workSeconds < 0)
+                $workSeconds = 0;
+
+            // statuses 更新（秒で統一）
+            $status->update([
+                'go' => $goAt,
+                'back' => $backAt,
+                'rest' => $restTotalSeconds,
+                'sum' => $workSeconds,
+                'note' => $validated['note'],
+                'apply' => 1,
+                'applied_at' => now(),
+                'rest_add' => $restAdd,
+            ]);
+        });
+
+        return redirect()->route('attendance.list')->with('message', '更新しました。');
+    }
+
+    public function stampCorrectionIndex(Request $request)
+    {
+        // 初回表示：apply=1
+        return $this->renderStampCorrectionList(1);
+    }
+
+    public function stampCorrectionFilter(Request $request)
+    {
+        // 押されたボタンで切り替え
+        // wait が押された → apply=1
+        // applied が押された → apply=2
+        // どちらも無い → apply=1
+        $apply = $request->has('applied') ? 2 : 1;
+
+        return $this->renderStampCorrectionList($apply);
+    }
+
+    private function renderStampCorrectionList(int $apply)
+    {
+        $isAdmin = (int) auth()->user()->admin === 1;
+
+        $q = Status::query()
+            ->with(['user:id,name'])
+            ->where('apply', $apply);
+
+        if (!$isAdmin) {
+            $q->where('user_id', auth()->id()); // 一般は自分の申請のみ
+        }
+
+        $items = $q->orderByDesc('applied_at')->paginate(20);
+
+        return view('stamp-correction', [
+            'items' => $items,
+            'applyFilter' => $apply,
+            'isAdmin' => $isAdmin,
+        ]);
     }
 }

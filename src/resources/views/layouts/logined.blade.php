@@ -20,15 +20,32 @@
 <body>
     <header class="header">
         <div class="header__inner">
-            <a href="/attendance"><img src="/images/rogo.png" alt="coachtech"></a>
+            @if(Auth::check() && Auth::user()->isAdmin())
+                <a href="/admin/attendance/list"><img src="/images/rogo.png" alt="coachtech"></a>
+            @else
+                <a href="/attendance"><img src="/images/rogo.png" alt="coachtech"></a>
+            @endif
             <div class="header__item">
-                <a href="/attendance" class="header__mypage">勤怠</a>
-                <a href="/attendance/list" class="header__mypage">勤怠一覧</a>
-                <a href="/stamp_correction_request/list" class="header__mypage">申請</a>
-                <form class="header__logout" action="{{ route('logout') }}" method="post">
-                    @csrf
-                    <button>ログアウト</button>
-                </form>
+                @if(Auth::check() && Auth::user()->isAdmin())
+                    {{-- 管理者用メニュー --}}
+                    <a href="/admin/attendance/list" class="header__mypage">勤怠一覧</a>
+                    <a href="/admin/staff/list" class="header__mypage">スタッフ一覧</a>
+                    <a href="/stamp_correction_request/list" class="header__mypage">申請一覧</a>
+                    <form class="header__logout" action="{{ route('adminLogout') }}" method="post">
+                        @csrf
+                        <button>ログアウト</button>
+                    </form>
+                @else
+                    {{-- 一般ユーザー用メニュー --}}
+                    <a href="/attendance" class="header__mypage">勤怠</a>
+                    <a href="/attendance/list" class="header__mypage">勤怠一覧</a>
+                    <a href="/stamp_correction_request/list" class="header__mypage">申請</a>
+                    <form class="header__logout" action="{{ route('logout') }}" method="post">
+                        @csrf
+                        <button>ログアウト</button>
+                    </form>
+                @endif
+
             </div>
         </div>
     </header>

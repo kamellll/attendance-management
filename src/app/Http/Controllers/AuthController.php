@@ -69,6 +69,16 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/login'); // 好きな画面へ
+        return redirect('/login');
+    }
+
+    public function adminLogout(Request $request)
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/admin/login');
     }
 }

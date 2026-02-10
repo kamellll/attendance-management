@@ -23,6 +23,7 @@ class CreateStatusesTable extends Migration
             $table->unsignedInteger('sum')->default(0);
             $table->integer('apply');
             $table->timestamp('applied_at')->nullable();
+            $table->unsignedInteger('rest_add')->default(0);
             $table->string('note')->nullable();
             $table->timestamps();
         });

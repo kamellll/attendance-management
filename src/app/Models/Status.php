@@ -17,9 +17,16 @@ class Status extends Model
         'sum',
         'apply',
         'applied_at',
+        'rest_add',
+        'note',
     ];
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function rests()
+    {
+        return $this->hasMany(Rest::class, 'statuses_id');
     }
 }

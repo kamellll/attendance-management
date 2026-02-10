@@ -6,77 +6,79 @@
 
 @section('content')
     <div class="container">
-
+        <h1 class="container__title">勤怠一覧</h1>
         {{-- ===== 上部：月ページャ（URLは常に /attendance/list のまま）===== --}}
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;">
+        <div class="container__paginate">
 
             {{-- 前月（古い月へ） --}}
-            <div style="flex:1; text-align:left;">
+            <div class="container__prev">
                 @if(!empty($prevYm))
                     <form action="{{ route('attendance.list.move') }}" method="POST" style="display:inline;">
                         @csrf
                         <input type="hidden" name="direction" value="prev">
-                        <button type="submit">前月</button>
+                        <button type="submit">
+                            <span class="arrow arrow--left" aria-hidden="true"></span>
+                            前月
+                        </button>
                     </form>
                 @else
-                    <span style="color:#999;">前月</span>
+                    <span class="container__prev--span">
+                        <span class="arrow arrow--left" aria-hidden="true"></span>
+                        前月
+                    </span>
                 @endif
             </div>
 
             {{-- 現在表示中の年月 --}}
-            <div style="flex:1; text-align:center; font-weight:700;">
+            <div class="container__this">
+                <img class="container__calendar" src="/images/calendar.png" alt="coachtech">
                 {{ $monthLabel }} {{-- 例: 2026/01 --}}
             </div>
 
             {{-- 翌月（新しい月へ） --}}
-            <div style="flex:1; text-align:right;">
+            <div class="container__next">
                 @if(!empty($nextYm))
                     <form action="{{ route('attendance.list.move') }}" method="POST" style="display:inline;">
                         @csrf
                         <input type="hidden" name="direction" value="next">
-                        <button type="submit">翌月</button>
+                        <button type="submit">
+                            翌月
+                            <span class="arrow arrow--right" aria-hidden="true"></span>
+                        </button>
                     </form>
                 @else
-                    <span style="color:#999;">翌月</span>
+                    <span class="container__next--span">
+                        翌月
+                        <span class="arrow arrow--right" aria-hidden="true"></span>
+                    </span>
                 @endif
             </div>
         </div>
 
         {{-- ===== テーブル：表示中の月の勤怠 ===== --}}
-        <div style="overflow:auto;">
-            <table style="width:100%; border-collapse:collapse;">
+        <div>
+            <table class="container__table">
                 <thead>
                     <tr>
-                        <th style="border-bottom:1px solid #ddd; padding:10px; text-align:left;">日付</th>
-                        <th style="border-bottom:1px solid #ddd; padding:10px; text-align:left;">出勤</th>
-                        <th style="border-bottom:1px solid #ddd; padding:10px; text-align:left;">退勤</th>
-                        <th style="border-bottom:1px solid #ddd; padding:10px; text-align:right;">休憩合計</th>
-                        <th style="border-bottom:1px solid #ddd; padding:10px; text-align:right;">勤務合計</th>
+                        <th>日付</th>
+                        <th>出勤</th>
+                        <th>退勤</th>
+                        <th>休憩</th>
+                        <th>合計</th>
+                        <th>詳細</th>
                     </tr>
                 </thead>
 
                 <tbody>
                     @forelse($items as $row)
                         <tr>
-                            <td style="border-bottom:1px solid #eee; padding:10px;">
-                                {{ $row->date_label }} {{-- 2026/01/26(月) --}}
+                            <td>{{ $row->date_label }}</td>
+                            <td>{{ \Carbon\Carbon::parse($row->go)->format('H:i') }}
                             </td>
-
-                            <td style="border-bottom:1px solid #eee; padding:10px;">
-                                {{ \Carbon\Carbon::parse($row->go)->format('H:i') }}
-                            </td>
-
-                            <td style="border-bottom:1px solid #eee; padding:10px;">
-                                {{ $row->back ? \Carbon\Carbon::parse($row->back)->format('H:i') : '-' }}
-                            </td>
-
-                            <td style="border-bottom:1px solid #eee; padding:10px; text-align:right;">
-                                {{ gmdate('H:i', (int) $row->rest) }}
-                            </td>
-
-                            <td style="border-bottom:1px solid #eee; padding:10px; text-align:right;">
-                                {{ gmdate('H:i', (int) $row->sum) }}
-                            </td>
+                            <td>{{ $row->back ? \Carbon\Carbon::parse($row->back)->format('H:i') : '-' }}</td>
+                            <td>{{ gmdate('G:i', (int) $row->rest) }}</td>
+                            <td>{{ gmdate('G:i', (int) $row->sum) }}</td>
+                            <td><a href="/attendance/detail/{{ $row->id }}">詳細</a></td>
                         </tr>
                     @empty
                         <tr>
