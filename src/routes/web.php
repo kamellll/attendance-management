@@ -30,7 +30,13 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/stamp_correction_request/approve/{attendance_correct_request_id}', [AdminController::class, 'approve']);
     Route::post('/admin/apply', [AdminController::class, 'apply'])
         ->name('admin.apply');
-
+    Route::get('/admin/staff/list', [AdminController::class, 'staffList']);
+    Route::get('/admin/attendance/staff/{id}', [AdminController::class, 'staff'])->name('admin.attendance.staff');
+    // 前月・翌月ボタン（セッション更新して /attendance/list に戻す）
+    Route::post('/admin/attendance/staff/move', [AdminController::class, 'moveMonth'])
+        ->name('admin.attendance.staff.move');
+    Route::get('/admin/attendance/staff/{id}/csv', [AdminController::class, 'staffCsv'])
+        ->name('admin.attendance.staff.csv');
 });
 Route::middleware('auth')->group(function () {
     Route::get('/verify', function () {

@@ -9,8 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Models\Status;
 use App\Models\Rest;
+use App\Models\User;
 use App\Http\Requests\AttendanceUpdateRequest;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 class AdminController extends Controller
 {
     public function index()
@@ -401,5 +403,214 @@ class AdminController extends Controller
         ]);
 
         return redirect('/admin/attendance/list');
+    }
+
+    public function staffList(Request $request)
+    {
+        $userId = auth()->id();
+
+        // 表示日の勤怠（通常は1件想定だが、複数あっても一覧で表示できるように）
+        $users = User::orderByDesc('id')->get();
+
+        return view('/admin/staff-list', compact(
+            'users',
+        ));
+    }
+
+    public function staff($id)
+    {
+        $userId = $id;
+
+        Carbon::setLocale('ja');
+
+        // このユーザーが持つ「データがある月」一覧（降順）
+        $monthKeys = Status::query()
+            ->where('user_id', $userId)
+            ->selectRaw("DATE_FORMAT(go, '%Y-%m') as ym")
+            ->groupBy('ym')
+            ->orderByDesc('ym')
+            ->pluck('ym')
+            ->values();
+
+        // セッションに保存されている表示月（なければ最新月 or 今月）
+        $ym = session(self::SESSION_KEY);
+
+        if (!$ym) {
+            $ym = $monthKeys->first() ?? Carbon::now()->format('Y-m');
+            session([self::SESSION_KEY => $ym]);
+        }
+
+        // 月が存在しない（削除などで）場合は最新に寄せる
+        if ($monthKeys->count() > 0 && !$monthKeys->contains($ym)) {
+            $ym = $monthKeys->first();
+            session([self::SESSION_KEY => $ym]);
+        }
+
+        $month = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+
+        // 表示月の勤怠
+        $items = Status::query()
+            ->where('user_id', $userId)
+            ->whereBetween('go', [$start, $end])
+            ->orderBy('go', 'asc')
+            ->get();
+
+        // 表示ラベル：年月（2026/01）
+        $monthLabel = $month->format('Y/m');
+
+        // 日付ラベル：2026/01/26(月)
+        $items->transform(function ($row) {
+            $d = Carbon::parse($row->go);
+            $row->date_label = $d->format('m/d') . '(' . $d->isoFormat('ddd') . ')';
+            return $row;
+        });
+
+        // 前月・翌月（データがある月だけリンクを出す）
+        $idx = $monthKeys->search($ym); // 0-based（降順）
+        $prevYm = null; // 古い月（前月ボタン）
+        $nextYm = null; // 新しい月（翌月ボタン）
+
+        if ($idx !== false) {
+            $prevYm = $monthKeys->get($idx + 1);        // 例：2025-11（より古い）
+            $nextYm = $idx > 0 ? $monthKeys->get($idx - 1) : null; // 例：2026-01（より新しい）
+        }
+
+        return view('/admin/attendance-staff', compact(
+            'userId',
+            'monthLabel',
+            'items',
+            'prevYm',
+            'nextYm'
+        ));
+    }
+
+    public function moveMonth(Request $request)
+    {
+        $userId = $request->userId;
+        $direction = $request->input('direction'); // 'prev' or 'next'
+
+        if (!in_array($direction, ['prev', 'next'], true)) {
+            return redirect()->route('attendance.list');
+        }
+
+        // データがある月一覧（降順）
+        $monthKeys = Status::query()
+            ->where('user_id', $userId)
+            ->selectRaw("DATE_FORMAT(go, '%Y-%m') as ym")
+            ->groupBy('ym')
+            ->orderByDesc('ym')
+            ->pluck('ym')
+            ->values();
+
+        // データが何もないならそのまま戻す
+        if ($monthKeys->isEmpty()) {
+            session([self::SESSION_KEY => Carbon::now()->format('Y-m')]);
+            return redirect()->route('attendance.list');
+        }
+
+        $currentYm = session(self::SESSION_KEY) ?? $monthKeys->first();
+        if (!$monthKeys->contains($currentYm)) {
+            $currentYm = $monthKeys->first();
+        }
+
+        $idx = $monthKeys->search($currentYm);
+        if ($idx === false) {
+            $idx = 0;
+        }
+
+        // 移動先（月が存在する時だけ移動）
+        if ($direction === 'prev') {
+            $target = $monthKeys->get($idx + 1); // 古い方へ
+        } else {
+            $target = $idx > 0 ? $monthKeys->get($idx - 1) : null; // 新しい方へ
+        }
+
+        if ($target) {
+            session([self::SESSION_KEY => $target]);
+        }
+
+        return redirect()->route('admin.attendance.staff');
+    }
+
+    public function staffCsv($id): StreamedResponse
+    {
+        $userId = (int) $id;
+
+        Carbon::setLocale('ja');
+
+        // 表示対象ユーザー名（ファイル名に使う用）
+        $user = User::query()->select('id', 'name')->findOrFail($userId);
+
+        // このユーザーが持つ「データがある月」一覧（降順）
+        $monthKeys = Status::query()
+            ->where('user_id', $userId)
+            ->selectRaw("DATE_FORMAT(go, '%Y-%m') as ym")
+            ->groupBy('ym')
+            ->orderByDesc('ym')
+            ->pluck('ym')
+            ->values();
+
+        // データが無ければ空CSVを返す（または戻すでもOK）
+        $ym = session(self::SESSION_KEY);
+        if (!$ym) {
+            $ym = $monthKeys->first() ?? Carbon::now()->format('Y-m');
+        }
+        if ($monthKeys->count() > 0 && !$monthKeys->contains($ym)) {
+            $ym = $monthKeys->first();
+        }
+
+        $month = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+
+        $items = Status::query()
+            ->where('user_id', $userId)
+            ->whereBetween('go', [$start, $end])
+            ->orderBy('go', 'asc')
+            ->get();
+
+        $fileName = sprintf(
+            'attendance_%s_%s.csv',
+            $user->name,
+            $month->format('Y-m')
+        );
+
+        // Excel文字化け対策：BOM付きUTF-8
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ];
+
+        return response()->streamDownload(function () use ($items) {
+            $out = fopen('php://output', 'w');
+
+            // BOM
+            fwrite($out, "\xEF\xBB\xBF");
+
+            // ヘッダー行
+            fputcsv($out, ['日付', '出勤', '退勤', '休憩合計', '合計勤務時間']);
+
+            foreach ($items as $row) {
+                $go = $row->go ? Carbon::parse($row->go) : null;
+                $back = $row->back ? Carbon::parse($row->back) : null;
+
+                $dateLabel = $go
+                    ? $go->format('Y/m/d') . '(' . $go->isoFormat('ddd') . ')'
+                    : '';
+
+                $goTime = $go ? $go->format('H:i') : '';
+                $backTime = $back ? $back->format('H:i') : '';
+
+                // rest/sum は秒なので HH:MM に
+                $restLabel = gmdate('H:i', (int) $row->rest);
+                $sumLabel = gmdate('H:i', (int) $row->sum);
+
+                fputcsv($out, [$dateLabel, $goTime, $backTime, $restLabel, $sumLabel]);
+            }
+
+            fclose($out);
+        }, $fileName, $headers);
     }
 }
