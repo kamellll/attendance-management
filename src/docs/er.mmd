@@ -1,0 +1,40 @@
+erDiagram
+    USERS {
+        BIGINT id PK
+        VARCHAR name
+        VARCHAR email "UNIQUE"
+        TIMESTAMP email_verified_at
+        VARCHAR password
+        INT admin 
+        VARCHAR remember_token 
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    STATUSES {
+        BIGINT id PK
+        BIGINT user_id FK
+        INT status
+        TIMESTAMP go
+        UNSIGNED_INT rest
+        TIMESTAMP back
+        UNSIGNED_INT sum 
+        INT apply
+        TIMESTAMP applied_at 
+        UNSIGNED_INT rest_add
+        VARCHAR note
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    RESTS {
+        BIGINT id PK
+        BIGINT statuses_id FK
+        TIMESTAMP start
+        TIMESTAMP end
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    USERS ||--o{ STATUSES : "has many"
+    STATUSES ||--o{ RESTS : "has many"

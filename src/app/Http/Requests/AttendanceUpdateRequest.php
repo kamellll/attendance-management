@@ -77,7 +77,7 @@ class AttendanceUpdateRequest extends FormRequest
 
             // ① go が back より後（または同時刻）ならエラー
             if ($goAt->gte($backAt)) {
-                $validator->errors()->add('back', '出勤時間もしくは退勤時間が不適切な値です');
+                $validator->errors()->add('back', '出勤時間が不適切な値です');
             }
 
             $starts = $this->input('start', []);
@@ -109,9 +109,8 @@ class AttendanceUpdateRequest extends FormRequest
                 // 出勤/退勤との前後関係（startが入っているときだけチェック）
                 if ($startAt->lt($goAt)) {
                     $validator->errors()->add("start.$i", "休憩時間が不適切な値です（" . ($i + 1) . "件目）");
-                }
-                if ($startAt->gt($backAt)) {
-                    $validator->errors()->add("start.$i", "休憩時間もしくは退勤時間が不適切な値です（" . ($i + 1) . "件目）");
+                } else if ($startAt->gt($backAt)) {
+                    $validator->errors()->add("start.$i", "休憩時間が不適切な値です（" . ($i + 1) . "件目）");
                 }
 
                 // end を取得（startが入っているときだけチェックする）
@@ -133,11 +132,9 @@ class AttendanceUpdateRequest extends FormRequest
                 // end の前後関係
                 if ($endAt->lt($goAt)) {
                     $validator->errors()->add("end.$i", "休憩時間もしくは退勤時間が不適切な値です（" . ($i + 1) . "件目）");
-                }
-                if ($endAt->gt($backAt)) {
+                } else if ($endAt->gt($backAt)) {
                     $validator->errors()->add("end.$i", "休憩時間もしくは退勤時間が不適切な値です（" . ($i + 1) . "件目）");
-                }
-                if ($endAt->lte($startAt)) {
+                } else if ($endAt->lte($startAt)) {
                     $validator->errors()->add("end.$i", "休憩時間が不適切な値です（" . ($i + 1) . "件目）");
                 }
             }
